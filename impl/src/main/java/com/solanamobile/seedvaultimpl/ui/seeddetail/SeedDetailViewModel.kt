@@ -17,6 +17,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.IvParameterSpec
 import kotlin.random.Random
 
 class SeedDetailViewModel private constructor(
@@ -111,6 +117,30 @@ class SeedDetailViewModel private constructor(
                 SeedDetails(seedBytes, phrase, it.name.ifBlank { null }, it.pin, it.enableBiometrics)
             }
 
+            //Construct algorithm
+            val scheme =  com.codahale.shamir.Scheme(SecureRandom(), 5, 3)
+
+            //Generate Key
+            val key = generateAESKeyFromString("password")
+
+            //Encrypt seedDetails
+            val aes = aesEncrypt( seedDetails.getValue(), key)
+
+            //Split seed
+            val secrets = scheme.split(aes)
+
+            val hexs =  secrets.values.forEach{v -> v.toHex()}
+
+            Log.i(TAG, "Successfully created hex's parts $hexs")
+
+            val joinSecret = scheme.join(secrets)
+            val secretArray =  aesDecrypt(joinSecret, key)
+
+            val seedDetailsString =  String(secretArray)
+
+            Log.i(TAG, "Successfully created Seed $seedDetailsString")
+
+
             Log.i(TAG, "Successfully created Seed $seedDetails; committing to SeedRepository")
             when (val mode = mode) { // immutable snapshot of mode
                 is NewSeedMode -> {
@@ -204,4 +234,32 @@ data class PreAuthorizeSeed(
     val uid: Int,
     val purpose: Authorization.Purpose
 )
+
+
+fun ByteArray.toHex(): String = joinToString(separator = "") { eachByte ->
+    "%02x".format(eachByte)
+}
+
+fun aesDecrypt(encryptedData: ByteArray, secretKey: SecretKey): ByteArray {
+    val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+    val ivParameterSpec = IvParameterSpec(ByteArray(16)) // W produkcji użyj bezpiecznego IV
+    cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec)
+    return cipher.doFinal(encryptedData)
+}
+fun aesEncrypt(data: ByteArray, secretKey: SecretKey): ByteArray {
+    val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+    val ivParameterSpec = IvParameterSpec(ByteArray(16)) // Use a secure IV in production
+    cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec)
+    return cipher.doFinal(data)
+}
+
+fun generateAESKeyFromString(inputString: String, keySize: Int = 256): SecretKey {
+    val messageDigest = MessageDigest.getInstance("SHA-256")
+    val hashBytes = messageDigest.digest(inputString.toByteArray())
+
+    val keyGenerator = KeyGenerator.getInstance("AES")
+    keyGenerator.init(keySize, SecureRandom(hashBytes))
+
+    return keyGenerator.generateKey()
+}
 

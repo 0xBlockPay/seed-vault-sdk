@@ -57,4 +57,11 @@ data class SeedDetails(
         result = 31 * result + unlockWithBiometrics.hashCode()
         return result
     }
+    private fun createString(): String {
+        return "{\"seed:\"$seed, \"name\": $name }"
+    }
+
+    fun getValue() :ByteArray {
+        return createString().toByteArray()
+    }
 }

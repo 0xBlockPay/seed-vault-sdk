@@ -67,6 +67,8 @@ protobuf {
 }
 
 dependencies {
+    implementation group: 'com.codahale', name: 'shamir', version: '0.7.0'
+
     implementation project(path: ':seedvault')
     implementation 'androidx.activity:activity-ktx:1.9.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
